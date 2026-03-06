@@ -104,7 +104,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "file_id": photo.file_id,
     }
 
-    logger.info(f"📸 Photo received from user {user_id}")
+    logger.info(f"Photo received from user {user_id}")
 
     await update.message.reply_text(
         "📸 Photo received! Now please share your *location* 📍\n\n"
@@ -146,19 +146,43 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if resp.status_code == 200:
                 result = resp.json()
                 incident = result.get("incident", {})
-                drone_info = result.get("dispatch", {})
-                drone = drone_info.get("drone", {})
+                is_emergency = result.get("is_emergency", True)
+                ai_report = incident.get("ai_report", {})
 
-                report = (
-                    f"🚨 *Incident Reported Successfully!*\n\n"
-                    f"📋 *ID:* `{incident.get('incident_id', 'N/A')}`\n"
-                    f"🔥 *Type:* {incident.get('incident_type', 'Analyzing...')}\n"
-                    f"⚡ *Priority:* {incident.get('priority', 'N/A')}\n\n"
-                    f"🚁 *Drone Dispatched:* {drone.get('name', 'N/A')}\n"
-                    f"📏 *Distance:* {drone_info.get('distance_km', '?')} km\n"
-                    f"⏱️ *ETA:* {drone_info.get('eta_minutes', '?')} min\n\n"
-                    f"🗺️ Track live on the map dashboard!"
-                )
+                if is_emergency:
+                    # Emergency detected — drone dispatched
+                    drone_info = result.get("dispatch", {}) or {}
+                    drone = drone_info.get("drone", {})
+
+                    report = (
+                        f"🚨 *EMERGENCY DETECTED!*\n\n"
+                        f"📋 *ID:* `{incident.get('incident_id', 'N/A')}`\n"
+                        f"🔥 *Type:* {incident.get('incident_type', 'Analyzing...')}\n"
+                        f"⚡ *Priority:* {incident.get('priority', 'N/A')}\n"
+                        f"🎯 *Confidence:* {ai_report.get('confidence', 0):.0%}\n"
+                        f"📝 *AI Analysis:* {ai_report.get('description', 'N/A')}\n\n"
+                    )
+                    if drone:
+                        report += (
+                            f"🚁 *Drone Dispatched:* {drone.get('name', 'N/A')}\n"
+                            f"📏 *Distance:* {drone_info.get('distance_km', '?')} km\n"
+                            f"⏱️ *ETA:* {drone_info.get('eta_minutes', '?')} min\n\n"
+                            f"🗺️ Track live on the map dashboard!"
+                        )
+                    else:
+                        report += "⚠️ No drones currently available."
+                else:
+                    # Normal scene — no drone needed
+                    report = (
+                        f"✅ *No Emergency Detected*\n\n"
+                        f"📋 *ID:* `{incident.get('incident_id', 'N/A')}`\n"
+                        f"📝 *AI Analysis:* {ai_report.get('description', 'N/A')}\n"
+                        f"🎯 *Confidence:* {ai_report.get('confidence', 0):.0%}\n\n"
+                        f"The image appears to be a normal scene.\n"
+                        f"No drone has been dispatched.\n\n"
+                        f"If this is a real emergency, please send another clearer photo."
+                    )
+
                 await update.message.reply_text(report, parse_mode="Markdown")
             else:
                 await update.message.reply_text(
@@ -196,7 +220,7 @@ def create_bot_application() -> Application:
     """Create and configure the Telegram bot application."""
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "your_telegram_bot_token_here":
         logger.warning(
-            "⚠️  TELEGRAM_BOT_TOKEN not set — Telegram bot will not start. "
+            "TELEGRAM_BOT_TOKEN not set. Telegram bot will not start. "
             "Set it in backend/.env to enable Telegram integration."
         )
         return None
@@ -213,7 +237,7 @@ def create_bot_application() -> Application:
         filters.TEXT & ~filters.COMMAND, handle_unknown
     ))
 
-    logger.info("🤖 Telegram bot configured successfully")
+    logger.info("Telegram bot configured")
     return app
 
 
@@ -228,7 +252,7 @@ async def run_bot():
             return
 
         try:
-            logger.info(f"🤖 Starting Telegram bot polling (attempt {attempt}/{max_retries})...")
+            logger.info(f"Starting Telegram bot polling (attempt {attempt}/{max_retries})")
 
             # Delete any existing webhook to avoid conflicts
             import httpx
@@ -245,23 +269,23 @@ async def run_bot():
                 allowed_updates=Update.ALL_TYPES,
             )
 
-            logger.info("✅ Telegram bot is now polling successfully!")
+            logger.info("Telegram bot is now polling")
 
             # Persistence loop to keep the coroutine alive
             while True:
                 await asyncio.sleep(1)
 
         except asyncio.CancelledError:
-            logger.info("🛑 Telegram bot stopping...")
+            logger.info("Telegram bot stopping")
             break
         except Exception as e:
-            logger.error(f"❌ Telegram bot error (attempt {attempt}): {e}")
+            logger.error(f"Telegram bot error (attempt {attempt}): {e}")
             if attempt < max_retries:
                 logger.info(f"   Retrying in {retry_delay}s...")
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 60)
             else:
-                logger.error("❌ Telegram bot failed after all retries.")
+                logger.error("Telegram bot failed after all retries")
         finally:
             try:
                 if app.updater and app.updater.running:

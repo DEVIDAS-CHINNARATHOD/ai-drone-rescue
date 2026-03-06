@@ -438,7 +438,7 @@
         <div class="nav-links">
             <a href="index.html" class="active">Home</a>
             <a href="map.html">Live Map</a>
-            <a href="camera.html">Camera</a>
+            
         </div>
     </nav>
 
@@ -451,7 +451,7 @@
                 rescue operations — all from one platform.</p>
             <div class="hero-buttons">
                 <a href="map.html" class="btn btn-primary">Live Drone Map</a>
-                <a href="camera.html" class="btn btn-secondary">Drone Camera</a>
+                
             </div>
         </section>
 
@@ -463,35 +463,35 @@
             </div>
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon"></div>
+                    <div class="feature-icon" style="color: var(--accent-blue);">01</div>
                     <h3>Telegram Reporting</h3>
                     <p>Report emergencies instantly by sending a photo and your GPS location via our Telegram bot.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"></div>
+                    <div class="feature-icon" style="color: var(--accent-cyan);">02</div>
                     <h3>AI Image Analysis</h3>
                     <p>Our AI analyzes incident images to detect objects and classify emergencies — fire, accidents,
                         floods, and more.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"></div>
+                    <div class="feature-icon" style="color: var(--accent-emerald);">03</div>
                     <h3>Smart Dispatch</h3>
                     <p>Haversine-based algorithm selects the nearest available drone and dispatches it automatically.
                     </p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"></div>
+                    <div class="feature-icon" style="color: var(--accent-amber);">04</div>
                     <h3>Real-Time Tracking</h3>
                     <p>Watch drones move in real-time on an interactive Leaflet.js map with live WebSocket updates.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"></div>
+                    <div class="feature-icon" style="color: var(--accent-red);">05</div>
                     <h3>Drone Camera</h3>
                     <p>Capture and upload images from the drone camera to provide live situation awareness to rescue
                         teams.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"></div>
+                    <div class="feature-icon" style="color: var(--accent-blue);">06</div>
                     <h3>Rescue Dashboard</h3>
                     <p>Streamlit-powered dashboard gives rescue teams full incident details, AI reports, and uploaded
                         images.</p>
@@ -539,12 +539,14 @@
                 document.getElementById("totalDrones").textContent = drones.length;
                 document.getElementById("availableDrones").textContent =
                     drones.filter(d => d.status === "idle").length;
-                document.getElementById("serverStatus").textContent = "🟢";
+                document.getElementById("serverStatus").textContent = "Online";
+                document.getElementById("serverStatus").style.color = "var(--accent-emerald)";
 
                 const incidents = await getIncidents();
                 document.getElementById("activeIncidents").textContent = incidents.length;
             } catch {
-                document.getElementById("serverStatus").textContent = "🔴";
+                document.getElementById("serverStatus").textContent = "Offline";
+                document.getElementById("serverStatus").style.color = "var(--accent-red)";
             }
         }
 

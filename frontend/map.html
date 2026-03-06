@@ -406,11 +406,11 @@
 <body>
     <!-- Top Bar -->
     <div class="topbar">
-        <div class="topbar-brand"><span>🚁</span> DroneRescue AI</div>
+        <div class="topbar-brand"><span></span> DroneRescue AI</div>
         <div class="topbar-nav">
             <a href="index.html">Home</a>
             <a href="map.html" class="active">Live Map</a>
-            <a href="camera.html">Camera</a>
+           
         </div>
         <div class="ws-status">
             <div class="ws-dot" id="wsDot"></div>
@@ -425,8 +425,8 @@
         <canvas id="cameraCanvas"></canvas>
         <div class="cam-status" id="cameraStatus">Initializing camera...</div>
         <div class="cam-buttons">
-            <button class="cam-btn cam-btn-capture" id="btnCapture" onclick="capturePhoto()">📸 Capture</button>
-            <button class="cam-btn cam-btn-send" id="btnSend" onclick="sendCapturedPhoto()">📤 Send to Dashboard</button>
+            <button class="cam-btn cam-btn-capture" id="btnCapture" onclick="capturePhoto()"> Capture</button>
+            <button class="cam-btn cam-btn-send" id="btnSend" onclick="sendCapturedPhoto()"> Send to Dashboard</button>
             <button class="cam-btn cam-btn-cancel" onclick="closeCameraModal()">✕ Close</button>
         </div>
     </div>
@@ -438,7 +438,7 @@
             <div class="sidebar-header">
                 <h3>Mission Control</h3>
                 <button class="btn-sm btn-danger" onclick="clearAllIncidents()"
-                    title="Clear all incidents and reset drones">🗑️ Clear All</button>
+                    title="Clear all incidents and reset drones"> Clear All</button>
             </div>
 
             <!-- User Location -->
@@ -449,16 +449,16 @@
             </div>
 
             <div class="sidebar-section">
-                <h4>🚁 Drone Fleet</h4>
+                <h4> Drone Fleet</h4>
                 <div id="droneList">
                     <div class="empty-state">Loading drones...</div>
                 </div>
             </div>
 
             <div class="sidebar-section">
-                <h4>🚨 Report Incident</h4>
+                <h4> Report Incident</h4>
                 <button class="btn-report" id="btnReportIncident" onclick="reportIncidentFromCamera()" disabled>
-                    🚨 Report Incident at My Location
+                     Report Incident at My Location
                 </button>
                 <div style="font-size:0.72em; color:var(--text-secondary); margin-top:6px; text-align:center;" id="reportHelp">
                     Waiting for your location...
@@ -466,7 +466,7 @@
             </div>
 
             <div class="sidebar-section">
-                <h4>🚨 Active Incidents</h4>
+                <h4> Active Incidents</h4>
                 <div id="incidentList">
                     <div class="empty-state">No incidents</div>
                 </div>
@@ -493,7 +493,11 @@
         let routePoints = {};
         let radiusCircles = {};
         let mapReady = false;
-        let userLat = null, userLon = null;
+        // Default / fallback location — North Bangalore, India
+        const DEFAULT_LAT = 13.114751;
+        const DEFAULT_LON = 77.634742;
+        let userLat = DEFAULT_LAT, userLon = DEFAULT_LON;
+        let usingDefaultLocation = true; // true until real GPS acquired
         let cameraStream = null;
         let capturedBlob = null;
         let cameraIncidentId = null; // which incident the camera is capturing for
@@ -502,7 +506,7 @@
         // Mappls Map Initialization
         // ---------------------------------------------------------------
         const mapObj = new mappls.Map("map", {
-            center: [12.97530, 77.59100],
+            center: [13.114751, 77.634742],
             zoom: 15,
             zoomControl: true,
             search: false,
@@ -511,7 +515,7 @@
         mapObj.addListener("load", function () {
             mapplsMap = mapObj;
             mapReady = true;
-            console.log("🗺️ Mappls map loaded successfully");
+            console.log("Mappls map loaded successfully");
             loadDrones();
             loadIncidents();
             getUserLocation();
@@ -521,62 +525,87 @@
         // User Geolocation
         // ---------------------------------------------------------------
         function getUserLocation() {
+            // Immediately show default location and enable reporting
+            document.getElementById("userCoords").textContent =
+                `${userLat.toFixed(5)}, ${userLon.toFixed(5)}` + (usingDefaultLocation ? " (default)" : "");
+            document.getElementById("btnReportIncident").disabled = false;
+            document.getElementById("reportHelp").textContent =
+                "Opens your camera to capture the scene & dispatch a drone";
+
+            // Place user marker at default position immediately
+            if (mapReady) {
+                placeUserMarker(userLat, userLon);
+            }
+
             if (!navigator.geolocation) {
-                document.getElementById("userCoords").textContent = "Geolocation not supported";
+                console.warn("Geolocation not supported, using default location");
                 return;
             }
-            navigator.geolocation.watchPosition(
+
+            // Get position once and lock it (no continuous tracking)
+            navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                    userLat = pos.coords.latitude;
-                    userLon = pos.coords.longitude;
-                    document.getElementById("userCoords").textContent =
-                        `${userLat.toFixed(5)}, ${userLon.toFixed(5)}`;
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+                    const accuracy = pos.coords.accuracy;
 
-                    // Enable report button
-                    const btn = document.getElementById("btnReportIncident");
-                    btn.disabled = false;
-                    document.getElementById("reportHelp").textContent =
-                        "Opens your camera to capture the scene & dispatch a drone";
+                    if (accuracy < 500) {
+                        userLat = lat;
+                        userLon = lon;
+                        usingDefaultLocation = false;
+                        document.getElementById("userCoords").textContent =
+                            `${userLat.toFixed(5)}, ${userLon.toFixed(5)} (GPS)`;
+                    } else {
+                        console.warn(`Geolocation accuracy too low (${accuracy.toFixed(0)}m), keeping default location`);
+                        document.getElementById("userCoords").textContent =
+                            `${userLat.toFixed(5)}, ${userLon.toFixed(5)} (default)`;
+                    }
 
-                    // Center map on user the first time
-                    if (mapReady && !userMarker) {
+                    if (mapReady) {
+                        placeUserMarker(userLat, userLon);
                         mapplsMap.setCenter({ lat: userLat, lng: userLon });
                         mapplsMap.setZoom(14);
                     }
-
-                    // Update / create user marker
-                    if (mapReady) {
-                        if (userMarker) {
-                            try { userMarker.remove(); } catch(e){}
-                            userMarker = null;
-                        }
-                        const userHTML = '<div style="position:relative;width:48px;height:56px;">' +
-                            '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56">' +
-                            '<circle cx="24" cy="24" r="22" fill="#3b82f6" fill-opacity="0.15" stroke="#3b82f6" stroke-width="3"/>' +
-                            '<circle cx="24" cy="24" r="14" fill="#3b82f6" fill-opacity="0.25"/>' +
-                            '<circle cx="24" cy="18" r="5" fill="white"/>' +
-                            '<path d="M15 33 Q15 26 24 26 Q33 26 33 33 L33 35 Q33 37 31 37 L17 37 Q15 37 15 35 Z" fill="white"/>' +
-                            '<rect x="6" y="46" width="36" height="10" rx="5" fill="#2563eb"/>' +
-                            '<text x="24" y="54" text-anchor="middle" font-size="8" font-weight="800" fill="white" font-family="sans-serif">YOU</text>' +
-                            '</svg></div>';
-                        userMarker = new mappls.Marker({
-                            map: mapplsMap,
-                            position: { lat: userLat, lng: userLon },
-                            fitbounds: false,
-                            html: userHTML,
-                            width: 48,
-                            height: 56,
-                            offset: [0, 0],
-                        });
-                        console.log("✅ User marker created at", userLat, userLon);
-                    }
                 },
                 (err) => {
-                    console.warn("Geolocation error:", err);
-                    document.getElementById("userCoords").textContent = "Location unavailable";
+                    console.warn("Geolocation error:", err.message, "— using default location");
+                    document.getElementById("userCoords").textContent =
+                        `${userLat.toFixed(5)}, ${userLon.toFixed(5)} (default)`;
+                    if (mapReady && !userMarker) {
+                        placeUserMarker(userLat, userLon);
+                        mapplsMap.setCenter({ lat: userLat, lng: userLon });
+                        mapplsMap.setZoom(14);
+                    }
                 },
-                { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+                { enableHighAccuracy: true, maximumAge: 60000, timeout: 10000 }
             );
+        }
+
+        // Helper — place or update the "YOU" marker
+        function placeUserMarker(lat, lon) {
+            if (userMarker) {
+                try { userMarker.remove(); } catch(e){}
+                userMarker = null;
+            }
+            const userHTML = '<div style="position:relative;width:48px;height:56px;">' +
+                '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56">' +
+                '<circle cx="24" cy="24" r="22" fill="#3b82f6" fill-opacity="0.15" stroke="#3b82f6" stroke-width="3"/>' +
+                '<circle cx="24" cy="24" r="14" fill="#3b82f6" fill-opacity="0.25"/>' +
+                '<circle cx="24" cy="18" r="5" fill="white"/>' +
+                '<path d="M15 33 Q15 26 24 26 Q33 26 33 33 L33 35 Q33 37 31 37 L17 37 Q15 37 15 35 Z" fill="white"/>' +
+                '<rect x="6" y="46" width="36" height="10" rx="5" fill="#2563eb"/>' +
+                '<text x="24" y="54" text-anchor="middle" font-size="8" font-weight="800" fill="white" font-family="sans-serif">YOU</text>' +
+                '</svg></div>';
+            userMarker = new mappls.Marker({
+                map: mapplsMap,
+                position: { lat: lat, lng: lon },
+                fitbounds: false,
+                html: userHTML,
+                width: 48,
+                height: 56,
+                offset: [0, 0],
+            });
+            console.log(" User marker at", lat, lon, usingDefaultLocation ? "(default)" : "(GPS)");
         }
 
         // ---------------------------------------------------------------
@@ -646,7 +675,7 @@
                 popupOptions: { openPopup: false },
             });
             droneMarkers[drone.id] = marker;
-            console.log("✅ Drone marker created:", drone.id, "at", drone.latitude, drone.longitude);
+            console.log(" Drone marker created:", drone.id, "at", drone.latitude, drone.longitude);
             return marker;
         }
 
@@ -675,7 +704,7 @@
                 popupOptions: { openPopup: false },
             });
             incidentMarkers[inc.incident_id] = marker;
-            console.log("✅ Incident marker created:", inc.incident_id, "at", inc.latitude, inc.longitude);
+            console.log(" Incident marker created:", inc.incident_id, "at", inc.latitude, inc.longitude);
             drawRadiusCircle(inc.incident_id, inc.latitude, inc.longitude);
             return marker;
         }
@@ -781,7 +810,7 @@
                         distText = ` · ${d.toFixed(1)} km away`;
                     }
                     div.innerHTML = `
-                        <div class="drone-icon">🚁</div>
+                        <div class="drone-icon"></div>
                         <div class="drone-info">
                             <div class="drone-name">${drone.name}</div>
                             <div class="drone-meta">🔋 ${drone.battery}%${distText} · ${drone.id}</div>
@@ -849,7 +878,7 @@
         // ---------------------------------------------------------------
         async function reportIncidentFromCamera() {
             if (userLat === null) {
-                showToast("❌ Location not available yet", "error");
+                showToast("Location not available yet", "error");
                 return;
             }
             cameraIncidentId = null; // this is a NEW incident, not a drone follow-up
@@ -886,8 +915,8 @@
                 });
                 video.srcObject = cameraStream;
                 status.textContent = mode === "report"
-                    ? "📸 Point at the incident and capture"
-                    : "📸 Drone camera — capture the scene";
+                    ? " Point at the incident and capture"
+                    : " Drone camera — capture the scene";
             } catch (err) {
                 console.error("Camera error:", err);
                 status.textContent = " Camera not available: " + err.message;
@@ -905,9 +934,9 @@
             canvas.style.display = "block";
             document.getElementById("btnCapture").style.display = "none";
             document.getElementById("btnSend").style.display = "inline-flex";
-            document.getElementById("cameraStatus").textContent = "✅ Photo captured! Click Send to upload.";
+            document.getElementById("cameraStatus").textContent = " Photo captured! Click Send to upload.";
 
-            canvas.toBlob((blob) => { capturedBlob = blob; }, "images/jpeg", 0.85);
+            canvas.toBlob((blob) => { capturedBlob = blob; }, "image/jpeg", 0.85);
         }
 
         async function sendCapturedPhoto() {
@@ -928,11 +957,11 @@
                     const resp = await fetch(`${API_BASE_URL}/incident`, { method: "POST", body: formData });
                     if (resp.ok) {
                         const result = await resp.json();
-                        showToast(`🚨 Incident ${result.incident.incident_id} created! Drone dispatched.`, "success");
+                        showToast(`Incident ${result.incident.incident_id} created! Drone dispatched.`, "success");
                         loadIncidents();
                         loadDrones();
                     } else {
-                        showToast("❌ Failed to create incident", "error");
+                        showToast(" Failed to create incident", "error");
                     }
                 } else if (cameraMode === "drone" && cameraIncidentId) {
                     // Upload drone camera image to existing incident
@@ -1009,7 +1038,7 @@
                     break;
 
                 case "drone_arrived":
-                    showToast(`✅ ${data.drone_name} arrived at incident!`, "success");
+                    showToast(` ${data.drone_name} arrived at incident!`, "success");
                     loadDrones();
                     break;
 
@@ -1025,7 +1054,7 @@
                     break;
 
                 case "new_incident":
-                    showToast(`🚨 New incident: ${data.incident.incident_type}`, "warning");
+                    showToast(`New incident: ${data.incident.incident_type}`, "warning");
                     loadIncidents();
                     break;
 
@@ -1079,10 +1108,10 @@
             if (!confirm("Clear ALL incidents and reset ALL drones?")) return;
             try {
                 const resp = await fetch(`${API_BASE_URL}/incidents`, { method: 'DELETE' });
-                if (resp.ok) showToast("✅ System reset", "success");
-                else showToast("❌ Reset failed", "error");
+                if (resp.ok) showToast("System reset", "success");
+                else showToast(" Reset failed", "error");
             } catch (err) {
-                showToast("❌ Connection error", "error");
+                showToast(" Connection error", "error");
             }
         }
 

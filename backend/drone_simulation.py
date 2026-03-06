@@ -29,13 +29,13 @@ class ConnectionManager:
         """Accept and store a new WebSocket connection."""
         await websocket.accept()
         self.active_connections.append(websocket)
-        logger.info(f"📡 WebSocket client connected ({len(self.active_connections)} total)")
+        logger.info(f"WebSocket client connected ({len(self.active_connections)} total)")
 
     def disconnect(self, websocket):
         """Remove a disconnected WebSocket."""
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        logger.info(f"📡 WebSocket client disconnected ({len(self.active_connections)} total)")
+        logger.info(f"WebSocket client disconnected ({len(self.active_connections)} total)")
 
     async def broadcast(self, message: dict):
         """Send a JSON message to all connected clients."""
@@ -112,7 +112,7 @@ async def simulate_drone_movement(
     drone_id = drone["id"]
 
     logger.info(
-        f"🛫 Starting simulation: {drone_id} → "
+        f"Starting simulation: {drone_id} -> "
         f"({target_lat}, {target_lon}) in {total_steps} steps"
     )
 
@@ -196,6 +196,6 @@ async def simulate_drone_movement(
         "drone_id": drone_id
     })
 
-    logger.info(f"🛬 {drone_id} arrived at incident {incident_id}")
+    logger.info(f"{drone_id} arrived at incident {incident_id}")
 
     return arrival_msg

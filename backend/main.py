@@ -61,7 +61,7 @@ uploaded_images: dict[str, list[str]] = {}  # incident_id → [image_paths]
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     logger.info("=" * 60)
-    logger.info("🚁 AI Drone Emergency Response System — Starting Up")
+    logger.info("AI Drone Emergency Response System — Starting Up")
     logger.info("=" * 60)
 
     # Start Telegram bot in background
@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logger.info("🛑 Shutting down...")
+    logger.info("Shutting down...")
     bot_task.cancel()
 
 
@@ -132,9 +132,9 @@ async def create_incident(
     4. Start drone simulation
     """
     incident_id = f"INC-{uuid.uuid4().hex[:8].upper()}"
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now().isoformat()
 
-    logger.info(f"🚨 New incident {incident_id} at ({latitude}, {longitude})")
+    logger.info(f"New incident {incident_id} at ({latitude}, {longitude})")
 
     # Step 1: Save the uploaded image
     image_filename = f"{incident_id}_{image.filename}"
@@ -142,7 +142,7 @@ async def create_incident(
     content = await image.read()
     with open(image_path, "wb") as f:
         f.write(content)
-    logger.info(f"   📸 Image saved: {image_filename}")
+    logger.info(f"Image saved: {image_filename}")
 
     # Step 2: AI analysis
     try:
@@ -157,7 +157,10 @@ async def create_incident(
             "recommendation": "Deploy reconnaissance drone.",
         }
 
-    # Step 3: Create incident record
+    # Step 3: Check if AI determined this is a real emergency
+    is_emergency = ai_report.get("is_emergency", True)  # Default to True for safety
+
+    # Step 4: Create incident record
     incident = {
         "incident_id": incident_id,
         "latitude": latitude,
@@ -167,47 +170,55 @@ async def create_incident(
         "priority": ai_report["priority"],
         "timestamp": timestamp,
         "ai_report": ai_report,
-        "status": "active",
+        "is_emergency": is_emergency,
+        "status": "active" if is_emergency else "dismissed",
         "drone_assigned": None,
         "uploaded_images": [],
     }
 
-    # Step 4: Reposition fleet and dispatch nearest drone
-    reposition_fleet_near(latitude, longitude)
-    
-    # Broadcast fleet repositioning to map
-    await ws_manager.broadcast({
-        "type": "fleet_repositioned",
-        "drones": get_fleet(),
-        "incident_lat": latitude,
-        "incident_lon": longitude,
-    })
+    dispatch_result = None
 
-    dispatch_result = dispatch_nearest(latitude, longitude)
+    if is_emergency:
+        # Step 5: Reposition fleet and dispatch nearest drone
+        logger.info("Emergency confirmed — dispatching drone")
+        reposition_fleet_near(latitude, longitude)
 
-    if dispatch_result:
-        drone = dispatch_result["drone"]
-        incident["drone_assigned"] = {
-            "drone_id": drone["id"],
-            "drone_name": drone["name"],
-            "distance_km": dispatch_result["distance_km"],
-            "eta_minutes": dispatch_result["eta_minutes"],
-        }
+        # Broadcast fleet repositioning to map
+        await ws_manager.broadcast({
+            "type": "fleet_repositioned",
+            "drones": get_fleet(),
+            "incident_lat": latitude,
+            "incident_lon": longitude,
+        })
 
-        # Step 5: Start drone simulation in background
-        asyncio.create_task(
-            simulate_drone_movement(
-                drone=drone,
-                target_lat=latitude,
-                target_lon=longitude,
-                incident_id=incident_id,
-                total_steps=25,
-                interval_seconds=1.0,
+        dispatch_result = dispatch_nearest(latitude, longitude)
+
+        if dispatch_result:
+            drone = dispatch_result["drone"]
+            incident["drone_assigned"] = {
+                "drone_id": drone["id"],
+                "drone_name": drone["name"],
+                "distance_km": dispatch_result["distance_km"],
+                "eta_minutes": dispatch_result["eta_minutes"],
+            }
+
+            # Step 6: Start drone simulation in background
+            asyncio.create_task(
+                simulate_drone_movement(
+                    drone=drone,
+                    target_lat=latitude,
+                    target_lon=longitude,
+                    incident_id=incident_id,
+                    total_steps=25,
+                    interval_seconds=1.0,
+                )
             )
-        )
-        logger.info(f"   🚁 Drone {drone['id']} dispatched, simulation started")
+            logger.info(f"Drone {drone['id']} dispatched, simulation started")
+        else:
+            logger.warning(f"No drones available for {incident_id}")
     else:
-        logger.warning(f"   ⚠️  No drones available for {incident_id}")
+        logger.info("Normal scene detected — no drone dispatch needed")
+        logger.info(f"Description: {ai_report.get('description', 'N/A')}")
 
     incidents.append(incident)
     uploaded_images[incident_id] = []
@@ -222,6 +233,7 @@ async def create_incident(
         "status": "success",
         "incident": incident,
         "dispatch": dispatch_result,
+        "is_emergency": is_emergency,
     }
 
 
@@ -327,7 +339,7 @@ async def upload_drone_image(
         uploaded_images[incident_id] = []
     uploaded_images[incident_id].append(image_url)
 
-    logger.info(f"📷 Drone image uploaded for {incident_id}: {image_filename}")
+    logger.info(f"Drone image uploaded for {incident_id}: {image_filename}")
 
     # Broadcast to dashboard clients
     await ws_manager.broadcast({

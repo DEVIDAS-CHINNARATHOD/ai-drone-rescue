@@ -1,8 +1,8 @@
 """
-Rescue Team Dashboard — Streamlit
-==================================
-Displays incident details, AI reports, drone assignments,
-and uploaded images for rescue team coordination.
+Rescue Team Dashboard
+=====================
+Streamlit-based dashboard for real-time incident monitoring,
+AI analysis reports, drone fleet status, and uploaded images.
 """
 
 import os
@@ -17,15 +17,19 @@ from datetime import datetime
 
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:10000")
 
+# Images directory — read files directly from disk for reliability
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+IMAGES_DIR = os.path.join(BASE_DIR, "images")
+
 st.set_page_config(
-    page_title="Rescue Team Dashboard",
+    page_title="Rescue Operations Dashboard",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
-# Custom CSS
+# Styles
 # ---------------------------------------------------------------------------
 
 st.markdown("""
@@ -94,7 +98,7 @@ def fetch_incidents():
 
 @st.cache_data(ttl=5)
 def fetch_drones():
-    """Fetch drone fleet status."""
+    """Fetch drone fleet status from the backend."""
     try:
         resp = requests.get(f"{SERVER_URL}/drones", timeout=5)
         return resp.json() if resp.status_code == 200 else []
@@ -104,7 +108,7 @@ def fetch_drones():
 
 @st.cache_data(ttl=5)
 def fetch_incident_detail(incident_id):
-    """Fetch detail for a specific incident."""
+    """Fetch full detail for a specific incident including uploaded images."""
     try:
         resp = requests.get(f"{SERVER_URL}/incidents/{incident_id}", timeout=5)
         return resp.json() if resp.status_code == 200 else None
@@ -113,7 +117,7 @@ def fetch_incident_detail(incident_id):
 
 
 def check_server():
-    """Check if the backend server is reachable."""
+    """Check whether the backend server is reachable."""
     try:
         resp = requests.get(f"{SERVER_URL}/", timeout=3)
         return resp.status_code == 200
@@ -121,25 +125,53 @@ def check_server():
         return False
 
 
+def load_image(image_url):
+    """
+    Load an image by filename. Tries local filesystem first,
+    then falls back to HTTP download from the backend.
+
+    Returns:
+        File path (str) or image bytes on success, None on failure.
+    """
+    if not image_url:
+        return None
+
+    filename = os.path.basename(image_url)
+    local_path = os.path.join(IMAGES_DIR, filename)
+
+    # Prefer filesystem (faster, more reliable on same machine)
+    if os.path.exists(local_path):
+        return local_path
+
+    # Fallback: fetch via HTTP from the backend
+    try:
+        resp = requests.get(f"{SERVER_URL}{image_url}", timeout=5)
+        if resp.status_code == 200:
+            return resp.content
+    except Exception:
+        pass
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown("## 🏥 Rescue Team")
+    st.markdown("## Rescue Operations")
     st.markdown("---")
 
     server_online = check_server()
     if server_online:
-        st.success("🟢 Backend Online")
+        st.success("Backend Online")
     else:
-        st.error("🔴 Backend Offline")
+        st.error("Backend Offline")
         st.info(f"Expected at: {SERVER_URL}")
 
     st.markdown("---")
 
-    # Auto-refresh
-    auto_refresh = st.checkbox(" Auto-refresh (5s)", value=True)
+    auto_refresh = st.checkbox("Auto-refresh (5s)", value=True)
     if st.button("Refresh Now"):
         st.cache_data.clear()
         st.rerun()
@@ -149,10 +181,11 @@ with st.sidebar:
 
     drones = fetch_drones()
     for drone in drones:
-        status_emoji = "🟢" if drone["status"] == "idle" else "🟡"
+        status_icon = "●" if drone["status"] == "idle" else "◐"
+        status_color = "green" if drone["status"] == "idle" else "orange"
         st.markdown(
-            f"{status_emoji} **{drone['name']}** — "
-            f"{drone['status']} ·  {drone['battery']}%"
+            f":{status_color}[{status_icon}] **{drone['name']}** — "
+            f"{drone['status'].capitalize()} · {drone['battery']}%"
         )
 
     st.markdown("---")
@@ -163,8 +196,8 @@ with st.sidebar:
 # Main Content
 # ---------------------------------------------------------------------------
 
-st.markdown("#  Rescue Team Dashboard")
-st.markdown("Real-time incident monitoring and coordination")
+st.markdown("# Rescue Operations Dashboard")
+st.markdown("Real-time incident monitoring, AI analysis, and drone coordination.")
 
 # Overview metrics
 incidents = fetch_incidents()
@@ -214,9 +247,15 @@ st.markdown("")
 # ---------------------------------------------------------------------------
 
 if not incidents:
-    st.info("📭 No incidents reported yet. Trigger a demo from the frontend or send a report via Telegram.")
+    st.info(
+        "No incidents reported yet. Use the Telegram bot or the "
+        "frontend camera to report an incident."
+    )
 else:
-    st.markdown('<div class="section-header">🚨 Incident Reports</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header">Incident Reports</div>',
+        unsafe_allow_html=True,
+    )
 
     for inc in reversed(incidents):
         priority = inc.get("priority", "MEDIUM")
@@ -224,8 +263,8 @@ else:
         drone_info = inc.get("drone_assigned", {})
 
         with st.expander(
-            f"{'🔴' if priority == 'CRITICAL' else '🟡' if priority == 'HIGH' else '🔵'} "
-            f"{inc['incident_id']} — {inc.get('incident_type', 'Unknown')} [{priority}]",
+            f"{inc['incident_id']} — "
+            f"{inc.get('incident_type', 'Unknown')} [{priority}]",
             expanded=(priority == "CRITICAL"),
         ):
             col_left, col_right = st.columns([2, 1])
@@ -238,26 +277,27 @@ else:
                 | **ID** | `{inc['incident_id']}` |
                 | **Type** | {inc.get('incident_type', 'N/A')} |
                 | **Priority** | {priority} |
-                | **Location** | {inc['latitude']:.4f}, {inc['longitude']:.4f} |
+                | **Location** | {inc['latitude']:.6f}, {inc['longitude']:.6f} |
                 | **Reported** | {inc.get('timestamp', 'N/A')} |
                 """)
 
-                # AI Report
+                # AI Analysis Report
                 if ai_report:
-                    st.markdown("####  AI Analysis Report")
+                    st.markdown("#### AI Analysis Report")
+                    matched = ', '.join(ai_report.get('matched_objects', [])) or 'None'
                     st.markdown(f"""
                     | Metric | Value |
                     |---|---|
                     | **Incident Type** | {ai_report.get('incident_type', 'N/A')} |
                     | **Confidence** | {ai_report.get('confidence', 0) * 100:.0f}% |
                     | **Objects Detected** | {ai_report.get('object_count', 0)} |
-                    | **Matched Objects** | {', '.join(ai_report.get('matched_objects', []))} |
+                    | **Matched Objects** | {matched} |
                     | **Model** | {ai_report.get('analysis_model', 'N/A')} |
                     """)
 
-                    st.info(f"💡 **Recommendation:** {ai_report.get('recommendation', 'N/A')}")
+                    recommendation = ai_report.get("recommendation", "N/A")
+                    st.info(f"**Recommendation:** {recommendation}")
 
-                    # Detected objects detail
                     detected = ai_report.get("detected_objects", [])
                     if detected:
                         st.markdown("**Detected Objects:**")
@@ -267,9 +307,9 @@ else:
                                 f"- **{obj['label']}** — confidence: {conf_pct:.0f}%"
                             )
 
-                # Drone Info
+                # Drone Assignment
                 if drone_info:
-                    st.markdown("####  Drone Assignment")
+                    st.markdown("#### Drone Assignment")
                     st.markdown(f"""
                     | Field | Value |
                     |---|---|
@@ -278,33 +318,42 @@ else:
                     | **ETA** | {drone_info.get('eta_minutes', '?')} min |
                     """)
                 else:
-                    st.warning(" No drone assigned")
+                    st.warning("No drone assigned to this incident.")
 
             with col_right:
                 # Incident image
-                st.markdown("#### 📸 Incident Image")
+                st.markdown("#### Incident Photo")
                 image_url = inc.get("image", "")
-                if image_url:
-                    full_url = f"{SERVER_URL}{image_url}"
+                img_data = load_image(image_url)
+                if img_data:
                     try:
-                        st.image(full_url, caption="Incident Photo", use_container_width=True)
+                        st.image(img_data, caption="Incident Photo", width="stretch")
                     except Exception:
-                        st.warning("Image not loadable")
+                        st.caption("Image could not be displayed.")
+                else:
+                    st.caption("No incident image available.")
 
-                # Uploaded drone images
+                # Drone camera images
                 detail = fetch_incident_detail(inc["incident_id"])
                 if detail:
                     drone_images = detail.get("uploaded_images", [])
                     if drone_images:
-                        st.markdown("#### 📷 Drone Camera Images")
+                        st.markdown("#### Drone Camera Captures")
                         for img_url in drone_images:
-                            full_url = f"{SERVER_URL}{img_url}"
-                            try:
-                                st.image(full_url, caption="Drone Capture", use_container_width=True)
-                            except Exception:
-                                st.warning("Image not loadable")
+                            img_data = load_image(img_url)
+                            if img_data:
+                                try:
+                                    st.image(
+                                        img_data,
+                                        caption="Drone Capture",
+                                        width="stretch",
+                                    )
+                                except Exception:
+                                    st.caption("Drone image could not be displayed.")
+                            else:
+                                st.caption("Drone image unavailable.")
                     else:
-                        st.caption("No drone images uploaded yet")
+                        st.caption("No drone images uploaded yet.")
 
 # ---------------------------------------------------------------------------
 # Auto-refresh

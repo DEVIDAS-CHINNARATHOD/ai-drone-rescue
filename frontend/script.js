@@ -65,11 +65,11 @@ class DroneWebSocket {
     }
 
     connect() {
-        console.log("🔌 Connecting WebSocket...", this.url);
+        console.log("Connecting WebSocket...", this.url);
         this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
-            console.log("✅ WebSocket connected");
+            console.log("WebSocket connected");
             this.reconnectDelay = 2000;
             // Start ping interval
             this.pingInterval = setInterval(() => {
@@ -91,7 +91,7 @@ class DroneWebSocket {
         };
 
         this.ws.onclose = () => {
-            console.log("❌ WebSocket disconnected, reconnecting...");
+            console.log("WebSocket disconnected, reconnecting...");
             clearInterval(this.pingInterval);
             setTimeout(() => this.connect(), this.reconnectDelay);
             this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, this.maxReconnectDelay);

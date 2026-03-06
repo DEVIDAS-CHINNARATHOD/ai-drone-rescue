@@ -13,69 +13,69 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Drone Fleet — pre-configured with 5 drones at various locations
-# Locations within 1-2 km of user at (12.97530, 77.59100) — Bangalore, India
+# Locations within 1-2 km of user at (13.114751, 77.634742) — North Bangalore, India
 # ---------------------------------------------------------------------------
 
 DRONE_FLEET = [
     {
         "id": "DRONE-01",
         "name": "Alpha Falcon",
-        "latitude": 12.9820,
-        "longitude": 77.5870,
+        "latitude": 13.1195,
+        "longitude": 77.6310,
         "battery": 95,
         "status": "idle",          # idle / responding / returning
         "speed_kmh": 80,
         "payload": "Medical Kit",
-        "home_lat": 12.9820,
-        "home_lon": 77.5870,
+        "home_lat": 13.1195,
+        "home_lon": 77.6310,
     },
     {
         "id": "DRONE-02",
         "name": "Beta Hawk",
-        "latitude": 12.9690,
-        "longitude": 77.5980,
+        "latitude": 13.1100,
+        "longitude": 77.6420,
         "battery": 88,
         "status": "idle",
         "speed_kmh": 75,
         "payload": "Fire Suppressant",
-        "home_lat": 12.9690,
-        "home_lon": 77.5980,
+        "home_lat": 13.1100,
+        "home_lon": 77.6420,
     },
     {
         "id": "DRONE-03",
         "name": "Gamma Eagle",
-        "latitude": 12.9840,
-        "longitude": 77.5960,
+        "latitude": 13.1210,
+        "longitude": 77.6390,
         "battery": 92,
         "status": "idle",
         "speed_kmh": 85,
         "payload": "Rescue Float",
-        "home_lat": 12.9840,
-        "home_lon": 77.5960,
+        "home_lat": 13.1210,
+        "home_lon": 77.6390,
     },
     {
         "id": "DRONE-04",
         "name": "Delta Osprey",
-        "latitude": 12.9670,
-        "longitude": 77.5850,
+        "latitude": 13.1080,
+        "longitude": 77.6280,
         "battery": 78,
         "status": "idle",
         "speed_kmh": 70,
         "payload": "AED + First Aid",
-        "home_lat": 12.9670,
-        "home_lon": 77.5850,
+        "home_lat": 13.1080,
+        "home_lon": 77.6280,
     },
     {
         "id": "DRONE-05",
         "name": "Echo Raptor",
-        "latitude": 12.9790,
-        "longitude": 77.5830,
+        "latitude": 13.1170,
+        "longitude": 77.6260,
         "battery": 100,
         "status": "idle",
         "speed_kmh": 90,
         "payload": "Search Light + Camera",
-        "home_lat": 12.9790,
-        "home_lon": 77.5830,
+        "home_lat": 13.1170,
+        "home_lon": 77.6260,
     },
 ]
 
@@ -115,7 +115,7 @@ def reposition_fleet_near(lat: float, lon: float):
     Reposition all idle drones to random offsets near the given coordinates.
     Offsets are between 0.005 and 0.025 degrees (approx 0.5-3 km).
     """
-    logger.info(f"📍 Repositioning fleet near ({lat}, {lon})")
+    logger.info(f"Repositioning fleet near ({lat}, {lon})")
     for drone in DRONE_FLEET:
         if drone["status"] == "idle":
             # Generate random offset (keeping it somewhat realistic)
@@ -160,7 +160,7 @@ def dispatch_nearest(
     available = [d for d in DRONE_FLEET if d["status"] == "idle"]
 
     if not available:
-        logger.warning("⚠️  No drones available for dispatch!")
+        logger.warning("No drones available for dispatch")
         return None
 
     # Calculate distances and sort
@@ -183,7 +183,7 @@ def dispatch_nearest(
     eta_minutes = (distance / nearest_drone["speed_kmh"]) * 60
 
     logger.info(
-        f"🚁 Dispatching {nearest_drone['id']} ({nearest_drone['name']}) — "
+        f"Dispatching {nearest_drone['id']} ({nearest_drone['name']}) - "
         f"{distance:.2f} km away, ETA: {eta_minutes:.1f} min"
     )
 
@@ -201,4 +201,4 @@ def reset_drone(drone_id: str):
         drone["status"] = "idle"
         drone["latitude"] = drone["home_lat"]
         drone["longitude"] = drone["home_lon"]
-        logger.info(f"🔄 {drone_id} reset to idle at home base")
+        logger.info(f" {drone_id} reset to idle at home base")
