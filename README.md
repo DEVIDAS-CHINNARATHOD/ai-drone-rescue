@@ -162,10 +162,6 @@ Open `frontend/map.html` to see:
 
 ---
 
-## Configuration
-
-Default drone positions are set near **North Bangalore, India** (13.1147, 77.6347).  
-The fleet automatically repositions around the first reported incident location.
 
 AI analysis uses a dual-provider approach:
 1. **Google Gemini** — primary vision model
